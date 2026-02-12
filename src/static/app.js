@@ -4,6 +4,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
 
+  // Function to show a temporary message
+  function showMessage(text, type = "info") {
+    messageDiv.textContent = text;
+    messageDiv.className = `message ${type}`;
+    messageDiv.classList.remove("hidden");
+    setTimeout(() => messageDiv.classList.add("hidden"), 5000);
+  }
+
   // Function to fetch activities from API
   async function fetchActivities() {
     try {
@@ -23,7 +31,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const participantsHtml =
           details.participants.length > 0
-            ? details.participants.map((email) => `<li>${email}</li>`).join("")
+            ? details.participants
+                .map((email) =>
+                  `<li><span class="participant-email">${email}</span><button type="button" class="participant-remove" data-activity="${name}" data-email="${email}" aria-label="Remove ${email}">🗑</button></li>`
+                )
+                .join("")
             : '<li class="no-participants">No participants yet</li>';
 
         activityCard.innerHTML = `
@@ -53,6 +65,34 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  // Event delegation for remove buttons
+  activitiesList.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".participant-remove");
+    if (!btn) return;
+
+    const activityName = btn.dataset.activity;
+    const email = btn.dataset.email;
+
+    if (!confirm(`Remove ${email} from ${activityName}?`)) return;
+
+    try {
+      const resp = await fetch(
+        `/activities/${encodeURIComponent(activityName)}/participants?email=${encodeURIComponent(email)}`,
+        { method: "DELETE" }
+      );
+      const result = await resp.json();
+      if (resp.ok) {
+        showMessage(result.message || `Removed ${email}` , "success");
+        fetchActivities();
+      } else {
+        showMessage(result.detail || "Failed to remove participant", "error");
+      }
+    } catch (err) {
+      console.error("Error removing participant:", err);
+      showMessage("Failed to remove participant. Try again.", "error");
+    }
+  });
+
   // Handle form submission
   signupForm.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -71,27 +111,16 @@ document.addEventListener("DOMContentLoaded", () => {
       const result = await response.json();
 
       if (response.ok) {
-        messageDiv.textContent = result.message;
-        messageDiv.className = "message success";
+        showMessage(result.message, "success");
         signupForm.reset();
         // Refresh activities to show updated participants
         fetchActivities();
       } else {
-        messageDiv.textContent = result.detail || "An error occurred";
-        messageDiv.className = "message error";
+        showMessage(result.detail || "An error occurred", "error");
       }
-
-      messageDiv.classList.remove("hidden");
-
-      // Hide message after 5 seconds
-      setTimeout(() => {
-        messageDiv.classList.add("hidden");
-      }, 5000);
     } catch (error) {
-      messageDiv.textContent = "Failed to sign up. Please try again.";
-      messageDiv.className = "message error";
-      messageDiv.classList.remove("hidden");
       console.error("Error signing up:", error);
+      showMessage("Failed to sign up. Please try again.", "error");
     }
   });
 
